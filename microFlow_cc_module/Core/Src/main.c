@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "modbus.h"
+#include "app.h"
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -431,11 +432,12 @@ void StartModbusTask(void const * argument)
   /* USER CODE BEGIN StartModbusTask */
   (void)argument;
 
-  /* Infinite loop - Modbus RTU 协议轮询 */
+  /* Infinite loop - Modbus RTU 协议轮询 + 命令处理 */
   for(;;)
   {
     eMBPoll();
     MB_PortAfterPoll();
+    MeasureFunc();        /* autoSavePending 检测 + 命令分发 */
     osDelay(1);
   }
   /* USER CODE END StartModbusTask */

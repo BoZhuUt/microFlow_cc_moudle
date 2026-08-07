@@ -78,22 +78,7 @@ typedef struct // 48001
 {
    float IN_FAN_RATE;  //48001
    float OUT_FAN_RATE;  //48003
-   float PID_P;  //48005
-   float PID_I;  //48007
-   float PID_D;  //48009
-   float setTemperature;  //48011
-   float tecPowerNow;  //48013
-   float tecBias;  //48015
-   float temperature1;  //48017
-   float temperature2;  //48019
-   uint16_t command;  //48021
-   uint16_t LED1;  //48022
-   uint16_t LED2;  //48023
-   uint16_t LED3;  //48024
-   uint16_t LED4;  //48025
-   uint16_t tempStatus;  //48026
-   uint16_t rsvd1;  //48027
-   uint16_t reserved[25];  //
+   uint16_t reserved[48];  //
 }RSVD_PARAM_T;
 //RSVD_PARAM_T Define End
 

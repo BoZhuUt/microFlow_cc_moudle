@@ -6,18 +6,3 @@ object_name	rsvd_param
 type	reg_name	vaild_check	default_value	max	min	float_ctr
 float	IN_FAN_RATE	1	5	100	0.01	FORBID_FP_ZERO
 float	OUT_FAN_RATE	1	5	100	0.01	FORBID_FP_ZERO
-float	PID_P	1	180	10000	-10000	FORBID_FP_ZERO
-float	PID_I	1	0.6	10000	-10000	FORBID_FP_ZERO
-float	PID_D	1	120	10000	-10000	FORBID_FP_ZERO
-float	setTemperature	1	25	50	5	FORBID_FP_ZERO
-float	tecPowerNow	1	10	100	-100	FORBID_FP_ZERO
-float	tecBias	1	0.001	200	-200	FORBID_FP_ZERO
-float	temperature1	0	null	0	0	
-float	temperature2	0	null	0	0	
-uint16_t	command	1	0	1000	0	ALLOW_FP_ZERO
-uint16_t	LED1	1	0	1000	0	ALLOW_FP_ZERO
-uint16_t	LED2	1	0	1000	0	ALLOW_FP_ZERO
-uint16_t	LED3	1	0	1000	0	ALLOW_FP_ZERO
-uint16_t	LED4	1	0	1000	0	ALLOW_FP_ZERO
-uint16_t	tempStatus	1	0	1000	0	ALLOW_FP_ZERO
-uint16_t	rsvd1	1	0	1000	0	ALLOW_FP_ZERO

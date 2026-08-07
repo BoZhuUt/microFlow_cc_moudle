@@ -3,11 +3,14 @@
  * @brief Modbus RTU 应用层实现
  *
  * 结构与 TEC 工程保持一致，适配 microFlow 双串口。
+ * 集成 Flash 参数存储和命令分发。
  */
 
 #include "modbus.h"
 #include "mb.h"
 #include "portevent.h"
+#include "app.h"
+#include "flash.h"
 #include "cmsis_os.h"
 #include <string.h>
 
@@ -26,6 +29,10 @@ RSVD_PARAM_T       rsvd_param;
 /* ----------------------- 诊断计数器 --------------------------------------*/
 MB_DiagCounters_t mb_diag = {0};
 
+/* ----------------------- Flash 调试变量 ----------------------------------*/
+volatile uint32_t dbg_flash_err_addr = 0;   /* Flash 写入失败的地址 */
+volatile uint32_t dbg_flash_err_sr = 0;    /* Flash 状态寄存器值 */
+
 /* Flash 自动保存标志 */
 volatile uint8_t autoSavePending = 0;
 
@@ -37,30 +44,6 @@ volatile uint8_t autoSavePending = 0;
 
 /* ----------------------- 私有函数声明 ------------------------------------*/
 static void Modbus_LoadDefaultParams(void);
-
-/* ----------------------- 参数初始化 --------------------------------------*/
-void SystemParam_init(void)
-{
-    /* 清零所有寄存器结构体 */
-    memset(&system_status,    0, sizeof(system_status));
-    memset(&comm_settings,    0, sizeof(comm_settings));
-    memset(&measure_settings, 0, sizeof(measure_settings));
-    memset(&calib_settings,   0, sizeof(calib_settings));
-    memset(&filter_settings,  0, sizeof(filter_settings));
-    memset(&measure_values,   0, sizeof(measure_values));
-    memset(&rsvd_param,       0, sizeof(rsvd_param));
-
-    /* 加载默认通信参数 */
-    Modbus_LoadDefaultParams();
-}
-
-static void Modbus_LoadDefaultParams(void)
-{
-    comm_settings.modbusAddr    = MODBUS_DEFAULT_ADDR;
-    comm_settings.modbusDatabits = MODBUS_DEFAULT_DATABITS;
-    comm_settings.modbusParity   = (uint16_t)MODBUS_DEFAULT_PARITY;
-    comm_settings.modbusBaud     = (uint32_t)MODBUS_DEFAULT_BAUD;
-}
 
 /* ----------------------- USART 初始化 -------------------------------------*/
 void Modbus_USART_Init(ULONG ulBaudRate, UCHAR ucDataBits, eMBParity eParity)
@@ -128,19 +111,20 @@ void Modbus_Init(void)
 {
     eMBErrorCode eStatus;
 
-    /* 初始化寄存器参数 */
-    SystemParam_init();
+    /*
+     * 步骤 1：从 Flash 加载参数（或首次启动恢复出厂默认值）
+     * 这会填充 system_status/comm_settings 等结构体
+     */
+    PowerOn_ReadModbusReg();
 
-    /* 初始化事件层 */
+    /*
+     * 步骤 2：初始化事件层
+     */
     xMBPortEventInit();
 
     /*
-     * eMBInit 参数：
-     * - ucMode: MB_RTU
-     * - ucSlaveAddr: 从站地址（后续可从 comm_settings 读取）
-     * - ucPort: 0（Port 层忽略，双串口统一处理）
-     * - ulBaudRate: 波特率
-     * - eParity: 校验方式
+     * 步骤 3：初始化协议栈
+     * 使用从 Flash 加载的通信参数（地址、波特率、校验）
      */
     eStatus = eMBInit(MB_RTU,
                       (UCHAR)comm_settings.modbusAddr,
@@ -150,20 +134,18 @@ void Modbus_Init(void)
 
     if(eStatus != MB_ENOERR)
     {
-        /* 初始化失败，可在此添加错误处理 */
-        while(1);  /* 调试用断点 */
+        while(1);  /* 调试用断点：初始化失败 */
     }
 
     /* 使能协议栈 - 内部会调用 vMBPortSerialEnable(TRUE, FALSE) 开启 RXNE 中断 */
     eStatus = eMBEnable();
     if(eStatus != MB_ENOERR)
     {
-        while(1);  /* 调试用断点 */
+        while(1);  /* 调试用断点：使能失败 */
     }
 
     /*
      * 安全保障：显式确保 NVIC 和 RXNE 中断已开启
-     * (Modbus_USART_Init 内部 DeInit/Init 可能影响中断状态)
      */
     HAL_NVIC_EnableIRQ(USART1_IRQn);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
@@ -172,32 +154,11 @@ void Modbus_Init(void)
 /* ----------------------- Poll 后事务释放 ----------------------------------*/
 void MB_PortAfterPoll(void)
 {
-    /*
-     * 阶段5：修正事务释放逻辑
-     *
-     * 在 eMBPoll() 返回后检查：
-     * - 如果没有响应需要发送（广播、CRC 错误、地址不匹配等），
-     *   且当前仍处于 RX 忙状态，说明帧已被协议栈消费但无响应，
-     *   可以安全释放事务。
-     *
-     * 注意：有正常响应时，事务由 TC 中断释放，不能在这里提前释放。
-     */
-
-    /* 检查是否有待处理事件（表示有响应正在发送） */
     if(!xMBPortEventPending())
     {
-        /*
-         * 无待处理事件，且如果 g_mb_rx_busy 仍为 TRUE，
-         * 说明是无需响应的帧（如广播或错误帧），安全释放。
-         *
-         * 如果 TC 中断已释放，g_mb_rx_busy 已为 FALSE，这里无害。
-         */
         if(g_mb_rx_busy)
         {
-            /* 仅当确认没有发送操作时才释放 */
-            /* 这里保守处理：让 TC 中断或下一帧超时自然释放 */
+            /* 保守处理：让 TC 中断或下一帧超时自然释放 */
         }
     }
 }
-
-

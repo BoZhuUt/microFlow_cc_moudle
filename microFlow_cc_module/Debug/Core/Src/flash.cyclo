@@ -1,0 +1,8 @@
+../Core/Src/flash.c:44:6:LoadRegsFromFactory	1
+../Core/Src/flash.c:56:6:SaveRegsToFactory	1
+../Core/Src/flash.c:74:19:STMFLASH_Erase	1
+../Core/Src/flash.c:98:26:STMFLASH_Write	3
+../Core/Src/flash.c:120:19:StoreModbusRegs	6
+../Core/Src/flash.c:147:6:ResetFlash	1
+../Core/Src/flash.c:172:6:CheckParam	2
+../Core/Src/flash.c:181:6:PowerOn_ReadModbusReg	3
