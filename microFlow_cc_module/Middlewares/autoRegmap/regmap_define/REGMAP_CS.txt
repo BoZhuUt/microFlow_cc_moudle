@@ -1,0 +1,14 @@
+using EasyModbus;
+
+namespace ItCv
+{
+$GROUP_CLASS
+    public class ProbeRegsMap
+    {
+$GROUP_DEFINE
+        public ProbeRegsMap(ModbusClient mb)
+        {
+$INIT_POR
+        }
+    }
+}

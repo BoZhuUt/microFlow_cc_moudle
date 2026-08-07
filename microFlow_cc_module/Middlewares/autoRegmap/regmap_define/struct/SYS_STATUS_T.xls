@@ -1,0 +1,17 @@
+byte_aligned	2					
+modbus_reg_len	52					
+modbus_addr_start(base1)	41001					
+object_name	system_status					
+						
+type	reg_name	vaild_check	default_value	max	min	float_ctr
+uint16_t	runStatus	0	0	0	0	
+uint16_t	commStatus	0	0	0	0	
+uint16_t	calibStatus	0	0	0	0	
+uint16_t	configStatus	0	0	0	0	
+uint32_t	productNum	0	101	0	0	
+char[16]	deviceName	0	TOC-Power	0	0	
+char[16]	serial	0	240001	0	0	
+char[16]	hardwareVer	0	null	0	0	
+char[16]	softwareVer	0	null	0	0	
+uint16_t	newStructFlg	0	0x2222	65535	0	
+uint16_t	measureTarget	1	0	100	0	

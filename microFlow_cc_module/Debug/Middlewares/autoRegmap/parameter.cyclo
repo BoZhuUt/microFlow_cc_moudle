@@ -1,0 +1,5 @@
+../Middlewares/autoRegmap/parameter.c:8:9:CheckUint16	3
+../Middlewares/autoRegmap/parameter.c:20:9:CheckUint32	3
+../Middlewares/autoRegmap/parameter.c:40:9:CheckFloat	10
+../Middlewares/autoRegmap/parameter.c:148:6:ParametarsInitByDefaultValue	1
+../Middlewares/autoRegmap/parameter.c:204:9:CheckParamyDefaultSetting	1

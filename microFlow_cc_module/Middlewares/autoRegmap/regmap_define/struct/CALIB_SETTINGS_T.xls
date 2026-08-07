@@ -1,0 +1,6 @@
+byte_aligned	2					
+modbus_reg_len	52					
+modbus_addr_start(base1)	44001					
+object_name	calib_settings					
+						
+type	reg_name	vaild_check	default_value	max	min	float_ctr

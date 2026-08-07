@@ -1,0 +1,4 @@
+../Middlewares/Modbus/portrw.c:16:14:eMBRegInputCB	3
+../Middlewares/Modbus/portrw.c:69:14:eMBRegHoldingCB	21
+../Middlewares/Modbus/portrw.c:233:14:eMBRegCoilsCB	1
+../Middlewares/Modbus/portrw.c:245:14:eMBRegDiscreteCB	1

@@ -1,0 +1,9 @@
+byte_aligned	2					
+modbus_reg_len	52					
+modbus_addr_start(base1)	46001					
+object_name	measure_values					
+						
+type	reg_name	vaild_check	default_value	max	min	float_ctr
+float	tecPowerNow	0	null	0	0	
+float	temperature1	0	null	0	0	
+float	temperature2	0	null	0	0	

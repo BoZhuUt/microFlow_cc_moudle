@@ -1,0 +1,4 @@
+../Middlewares/Modbus/port/portevent.c:32:1:xMBPortEventInit	1
+../Middlewares/Modbus/port/portevent.c:40:1:xMBPortEventPost	1
+../Middlewares/Modbus/port/portevent.c:50:1:xMBPortEventGet	2
+../Middlewares/Modbus/port/portevent.c:68:1:xMBPortEventPending	1

@@ -1,0 +1,8 @@
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:80:1:eMBRTUInit	4
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:125:1:eMBRTUStart	1
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:141:1:eMBRTUStop	1
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:150:1:eMBRTUReceive	3
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:186:1:eMBRTUSend	2
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:225:1:xMBRTUReceiveFSM	6
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:285:1:xMBRTUTransmitFSM	4
+../Middlewares/Modbus/modbus/rtu/mbrtu.c:323:1:xMBRTUTimerT35Expired	7
