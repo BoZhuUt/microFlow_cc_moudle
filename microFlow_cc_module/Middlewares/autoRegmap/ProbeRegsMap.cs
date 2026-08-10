@@ -44,8 +44,13 @@ public ProbeReg temperature2;
 }
 public class RSVD_PARAM_T
 {
-public ProbeReg IN_FAN_RATE;
-public ProbeReg OUT_FAN_RATE;
+public ProbeReg flowRateNow;
+public ProbeReg flowRateAve;
+public ProbeReg aveNum;
+public ProbeReg flowRateSet;
+public ProbeReg valveOpening;
+public ProbeReg manualMode;
+public ProbeReg modbusCmd2;
 }
     public class ProbeRegsMap
     {
@@ -80,8 +85,13 @@ measure_settings .command = new ProbeReg("command", "uint16_t",43005, mb);
 measure_values .tecPowerNow = new ProbeReg("tecPowerNow", "float",46000, mb);
 measure_values .temperature1 = new ProbeReg("temperature1", "float",46002, mb);
 measure_values .temperature2 = new ProbeReg("temperature2", "float",46004, mb);
-rsvd_param .IN_FAN_RATE = new ProbeReg("IN_FAN_RATE", "float",48000, mb);
-rsvd_param .OUT_FAN_RATE = new ProbeReg("OUT_FAN_RATE", "float",48002, mb);
+rsvd_param .flowRateNow = new ProbeReg("flowRateNow", "float",48000, mb);
+rsvd_param .flowRateAve = new ProbeReg("flowRateAve", "float",48002, mb);
+rsvd_param .aveNum = new ProbeReg("aveNum", "float",48004, mb);
+rsvd_param .flowRateSet = new ProbeReg("flowRateSet", "float",48006, mb);
+rsvd_param .valveOpening = new ProbeReg("valveOpening", "float",48008, mb);
+rsvd_param .manualMode = new ProbeReg("manualMode", "uint16_t",48010, mb);
+rsvd_param .modbusCmd2 = new ProbeReg("modbusCmd2", "uint16_t",48011, mb);
         }
     }
 }

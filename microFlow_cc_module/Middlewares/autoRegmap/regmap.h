@@ -76,9 +76,14 @@ typedef struct // 46001
 //RSVD_PARAM_T Define Begin
 typedef struct // 48001
 {
-   float IN_FAN_RATE;  //48001
-   float OUT_FAN_RATE;  //48003
-   uint16_t reserved[48];  //
+   float flowRateNow;  //48001
+   float flowRateAve;  //48003
+   float aveNum;  //48005
+   float flowRateSet;  //48007
+   float valveOpening;  //48009
+   uint16_t manualMode;  //48011
+   uint16_t modbusCmd2;  //48012
+   uint16_t reserved[40];  //
 }RSVD_PARAM_T;
 //RSVD_PARAM_T Define End
 

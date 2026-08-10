@@ -112,9 +112,9 @@ const uint32_t default_comm_settings_modbusBaud = 9600;
 //comm_settings default value define end
 
 //measure_settings default value define begin
-const uint16_t default_measure_settings_sampleCycle = 0;
-const float default_measure_settings_measureRange = 0.0f;
-const float default_measure_settings_measureRange2 = 0.0f;
+const uint16_t default_measure_settings_sampleCycle = 2;
+const float default_measure_settings_measureRange = 100.0f;
+const float default_measure_settings_measureRange2 = 100.0f;
 const uint16_t default_measure_settings_command = 0;
 //measure_settings default value define end
 
@@ -128,8 +128,13 @@ const uint16_t default_measure_settings_command = 0;
 //measure_values default value define end
 
 //rsvd_param default value define begin
-const float default_rsvd_param_IN_FAN_RATE = 5.0f;
-const float default_rsvd_param_OUT_FAN_RATE = 5.0f;
+const float default_rsvd_param_flowRateNow = 5.0f;
+const float default_rsvd_param_flowRateAve = 5.0f;
+const float default_rsvd_param_aveNum = 5.0f;
+const float default_rsvd_param_flowRateSet = 5.0f;
+const float default_rsvd_param_valveOpening = 30.0f;
+const uint16_t default_rsvd_param_manualMode = 1;
+const uint16_t default_rsvd_param_modbusCmd2 = 0;
 //rsvd_param default value define end
 
 void ParametarsInitByDefaultValue()
@@ -170,8 +175,13 @@ void ParametarsInitByDefaultValue()
     //measure_values power on parameters init end
 
     //rsvd_param power on parameters init begin
-    rsvd_param.IN_FAN_RATE = default_rsvd_param_IN_FAN_RATE;
-    rsvd_param.OUT_FAN_RATE = default_rsvd_param_OUT_FAN_RATE;
+    rsvd_param.flowRateNow = default_rsvd_param_flowRateNow;
+    rsvd_param.flowRateAve = default_rsvd_param_flowRateAve;
+    rsvd_param.aveNum = default_rsvd_param_aveNum;
+    rsvd_param.flowRateSet = default_rsvd_param_flowRateSet;
+    rsvd_param.valveOpening = default_rsvd_param_valveOpening;
+    rsvd_param.manualMode = default_rsvd_param_manualMode;
+    rsvd_param.modbusCmd2 = default_rsvd_param_modbusCmd2;
     //rsvd_param power on parameters init end
 
 }
@@ -207,8 +217,13 @@ uint8_t CheckParamyDefaultSetting()
         //measure_values check parameters end
 
         //rsvd_param check parameters begin
-       update_flg += CheckFloat(&rsvd_param.IN_FAN_RATE, 0.01f, 100.0f, FORBID_FP_ZERO, default_rsvd_param_IN_FAN_RATE);
-       update_flg += CheckFloat(&rsvd_param.OUT_FAN_RATE, 0.01f, 100.0f, FORBID_FP_ZERO, default_rsvd_param_OUT_FAN_RATE);
+       update_flg += CheckFloat(&rsvd_param.flowRateNow, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateNow);
+       update_flg += CheckFloat(&rsvd_param.flowRateAve, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateAve);
+       update_flg += CheckFloat(&rsvd_param.aveNum, 0.01f, 100.0f, FORBID_FP_ZERO, default_rsvd_param_aveNum);
+       update_flg += CheckFloat(&rsvd_param.flowRateSet, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateSet);
+       update_flg += CheckFloat(&rsvd_param.valveOpening, 0.01f, 100.0f, FORBID_FP_ZERO, default_rsvd_param_valveOpening);
+       update_flg += CheckUint16(&rsvd_param.manualMode, 0, 5, default_rsvd_param_manualMode);
+       update_flg += CheckUint16(&rsvd_param.modbusCmd2, 0, 1000, default_rsvd_param_modbusCmd2);
         //rsvd_param check parameters end
 
 	}

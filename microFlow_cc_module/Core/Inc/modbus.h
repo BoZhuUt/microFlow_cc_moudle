@@ -62,4 +62,7 @@ void USART2_IRQHandler_USER(void);
 /* Poll 后事务释放 */
 void MB_PortAfterPoll(void);
 
+/* TIM7 T3.5 到期时更新双串口事务状态 */
+void MB_PortOnT35Expired(void);
+
 #endif /* _MODBUS_H */

@@ -65,7 +65,6 @@ vMBPortTimersDisable(  )
  */
 void prvvTIMERExpiredISR( void )
 {
-    extern volatile BOOL g_mb_rx_busy;
-    g_mb_rx_busy = FALSE;
+    MB_PortOnT35Expired();
     ( void )pxMBPortCBTimerExpired(  );
 }

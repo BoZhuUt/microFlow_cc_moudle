@@ -4,7 +4,7 @@ modbus_addr_start(base1)	43001
 object_name	measure_settings					
 						
 type	reg_name	vaild_check	default_value	max	min	float_ctr
-uint16_t	sampleCycle	1	0	1000	0	FORBID_FP_ZERO
-float	measureRange	1	0	1000	0	FORBID_FP_ZERO
-float	measureRange2	1	0	1000	0	FORBID_FP_ZERO
+uint16_t	sampleCycle	1	2	1000	0	FORBID_FP_ZERO
+float	measureRange	1	100	1000	0	FORBID_FP_ZERO
+float	measureRange2	1	100	1000	0	FORBID_FP_ZERO
 uint16_t	command	1	0	1000	0	FORBID_FP_ZERO

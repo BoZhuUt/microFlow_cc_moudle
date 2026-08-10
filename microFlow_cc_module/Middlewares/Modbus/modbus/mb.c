@@ -386,7 +386,7 @@ eMBPoll( void )
 
             /* If the request was not sent to the broadcast address we
              * return a reply. */
-            //if( ucRcvAddress != MB_ADDRESS_BROADCAST )
+            if( ucRcvAddress != MB_ADDRESS_BROADCAST )
             {
                 if( eException != MB_EX_NONE )
                 {

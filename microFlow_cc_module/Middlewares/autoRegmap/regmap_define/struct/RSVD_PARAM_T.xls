@@ -4,5 +4,10 @@ modbus_addr_start(base1)	48001
 object_name	rsvd_param					
 						
 type	reg_name	vaild_check	default_value	max	min	float_ctr
-float	IN_FAN_RATE	1	5	100	0.01	FORBID_FP_ZERO
-float	OUT_FAN_RATE	1	5	100	0.01	FORBID_FP_ZERO
+float	flowRateNow	1	5	30	0.01	FORBID_FP_ZERO
+float	flowRateAve	1	5	30	0.01	FORBID_FP_ZERO
+float	aveNum	1	5	100	0.01	FORBID_FP_ZERO
+float	flowRateSet	1	5	30	0.01	FORBID_FP_ZERO
+float	valveOpening	1	30	100	0.01	FORBID_FP_ZERO
+uint16_t	manualMode	1	1	5	0	ALLOW_FP_ZERO
+uint16_t	modbusCmd2	1	0	1000	0	ALLOW_FP_ZERO

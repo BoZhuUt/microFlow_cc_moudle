@@ -20,5 +20,10 @@ command,43005,uint16_t,measure_settings
 tecPowerNow,46000,float,measure_values
 temperature1,46002,float,measure_values
 temperature2,46004,float,measure_values
-IN_FAN_RATE,48000,float,rsvd_param
-OUT_FAN_RATE,48002,float,rsvd_param
+flowRateNow,48000,float,rsvd_param
+flowRateAve,48002,float,rsvd_param
+aveNum,48004,float,rsvd_param
+flowRateSet,48006,float,rsvd_param
+valveOpening,48008,float,rsvd_param
+manualMode,48010,uint16_t,rsvd_param
+modbusCmd2,48011,uint16_t,rsvd_param

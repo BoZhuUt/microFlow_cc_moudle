@@ -14,9 +14,6 @@
 #include "cmsis_os.h"
 #include <string.h>
 
-/* ----------------------- 外部变量（portserial.c 定义） ---------------------*/
-extern volatile BOOL g_mb_rx_busy;
-
 /* ----------------------- 寄存器实例定义 ----------------------------------*/
 SYS_STATUS_T       system_status;
 COMM_SETTINGS_T    comm_settings;
@@ -149,16 +146,4 @@ void Modbus_Init(void)
      */
     HAL_NVIC_EnableIRQ(USART1_IRQn);
     HAL_NVIC_EnableIRQ(USART2_IRQn);
-}
-
-/* ----------------------- Poll 后事务释放 ----------------------------------*/
-void MB_PortAfterPoll(void)
-{
-    if(!xMBPortEventPending())
-    {
-        if(g_mb_rx_busy)
-        {
-            /* 保守处理：让 TC 中断或下一帧超时自然释放 */
-        }
-    }
 }
