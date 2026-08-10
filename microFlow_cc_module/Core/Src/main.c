@@ -35,6 +35,15 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+#define FLOW_ADC_VREF_V          3.3f
+#define FLOW_ADC_FULL_SCALE      4095.0f
+#define FLOW_ADC_ERROR_VALUE     (-1.0f)
+#define FLOW_ADC_AVERAGE_COUNT   10U
+#define FLOW_ZERO_ML_MIN         0.0f
+#define FLOW_FULL_SCALE_ML_MIN   30.0f
+#define FLOW_ZERO_V              0.0f
+#define FLOW_FULL_SCALE_V        2.25f
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -43,6 +52,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim16;
 
@@ -63,6 +75,8 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM7_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_TIM1_Init(void);
 void StartDefaultTask(void const * argument);
 void StartFlowTask(void const * argument);
 void StartModbusTask(void const * argument);
@@ -109,8 +123,21 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM7_Init();
   MX_TIM16_Init();
+  MX_ADC1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-Modbus_Init();
+  if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0U);
+  if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  Modbus_Init();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -208,6 +235,134 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Common config
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc1.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 1;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 39999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.BreakFilter = 0;
+  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+  sBreakDeadTimeConfig.Break2Filter = 0;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
 }
 
 /**
@@ -382,6 +537,165 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+/**
+  * @author Bo
+  * @date   Created: 2026-08-10
+  * @date   Modified: 2026-08-10
+  * @brief  Read one sample from the analog flow-meter input.
+  * @param  raw Pointer used to return the 12-bit ADC result.
+  * @retval HAL status.
+  */
+HAL_StatusTypeDef FlowAdc_ReadRaw(uint16_t *raw)
+{
+  HAL_StatusTypeDef status;
+  HAL_StatusTypeDef stopStatus;
+
+  if (raw == NULL)
+  {
+    return HAL_ERROR;
+  }
+
+  status = HAL_ADC_Start(&hadc1);
+  if (status != HAL_OK)
+  {
+    return status;
+  }
+
+  status = HAL_ADC_PollForConversion(&hadc1, 10U);
+  if (status == HAL_OK)
+  {
+    *raw = (uint16_t)HAL_ADC_GetValue(&hadc1);
+  }
+
+  stopStatus = HAL_ADC_Stop(&hadc1);
+  if (status == HAL_OK)
+  {
+    status = stopStatus;
+  }
+
+  return status;
+}
+
+/**
+  * @author Bo
+  * @date   Created: 2026-08-10
+  * @date   Modified: 2026-08-10
+  * @brief  Read and average multiple ADC samples.
+  * @param  num Number of samples to average; must be greater than zero.
+  * @retval Average ADC code, or FLOW_ADC_ERROR_VALUE on failure.
+  */
+float getAdcAverage(uint16_t num)
+{
+  uint32_t sum = 0U;
+  uint16_t raw;
+  uint16_t index;
+
+  if (num == 0U)
+  {
+    return FLOW_ADC_ERROR_VALUE;
+  }
+
+  for (index = 0U; index < num; index++)
+  {
+    if (FlowAdc_ReadRaw(&raw) != HAL_OK)
+    {
+      return FLOW_ADC_ERROR_VALUE;
+    }
+
+    sum += raw;
+  }
+
+  return (float)sum / (float)num;
+}
+
+/**
+  * @author Bo
+  * @date   Created: 2026-08-10
+  * @date   Modified: 2026-08-10
+  * @brief  Read the averaged voltage of the analog flow-meter input.
+  * @param  num Number of ADC samples to average.
+  * @retval Input voltage in volts, or FLOW_ADC_ERROR_VALUE on failure.
+  */
+float getAdcVoltage(uint16_t num)
+{
+  float adcAverage = getAdcAverage(num);
+
+  if (adcAverage < 0.0f)
+  {
+    return FLOW_ADC_ERROR_VALUE;
+  }
+
+  return adcAverage * FLOW_ADC_VREF_V / FLOW_ADC_FULL_SCALE;
+}
+
+/**
+  * @author Bo
+  * @date   Created: 2026-08-10
+  * @date   Modified: 2026-08-10
+  * @brief  Convert the averaged ADC voltage to flow using two-point scaling.
+  * @param  num Number of ADC samples to average.
+  * @param  flowZero Flow value at the zero-point voltage.
+  * @param  flowFullScale Flow value at the full-scale voltage.
+  * @param  voltageZero Voltage corresponding to flowZero.
+  * @param  voltageFullScale Voltage corresponding to flowFullScale.
+  * @retval Converted flow, or FLOW_ADC_ERROR_VALUE on failure.
+  * @note   The result is not clamped to the configured flow range.
+  */
+float getFlow(uint16_t num, float flowZero, float flowFullScale,
+              float voltageZero, float voltageFullScale)
+{
+  float voltage;
+
+  if (voltageFullScale == voltageZero)
+  {
+    return FLOW_ADC_ERROR_VALUE;
+  }
+
+  voltage = getAdcVoltage(num);
+  if (voltage < 0.0f)
+  {
+    return FLOW_ADC_ERROR_VALUE;
+  }
+
+  return flowZero + (voltage - voltageZero) *
+         (flowFullScale - flowZero) /
+         (voltageFullScale - voltageZero);
+}
+
+/**
+  * @author Bo
+  * @date   Created: 2026-08-10
+  * @date   Modified: 2026-08-10
+  * @brief  Set the valve PWM duty cycle on PA8/TIM1_CH1.
+  * @param  dutyPercent Requested duty cycle in percent.
+  * @retval None.
+  * @note   Values outside 0...100 percent are clamped to that range.
+  */
+void Valve_SetDuty(float dutyPercent)
+{
+  uint32_t period;
+  uint32_t compare;
+
+  if (dutyPercent < 0.0f)
+  {
+    dutyPercent = 0.0f;
+  }
+  else if (dutyPercent > 100.0f)
+  {
+    dutyPercent = 100.0f;
+  }
+
+  period = __HAL_TIM_GET_AUTORELOAD(&htim1) + 1U;
+  compare = (uint32_t)(((float)period * dutyPercent / 100.0f) + 0.5f);
+
+  if (compare > period)
+  {
+    compare = period;
+  }
+
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, compare);
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -412,9 +726,22 @@ void StartDefaultTask(void const * argument)
 void StartFlowTask(void const * argument)
 {
   /* USER CODE BEGIN StartFlowTask */
+  float flow;
+
   /* Infinite loop */
   for(;;)
   {
+    flow = getFlow(FLOW_ADC_AVERAGE_COUNT,
+                   FLOW_ZERO_ML_MIN,
+                   FLOW_FULL_SCALE_ML_MIN,
+                   FLOW_ZERO_V,
+                   FLOW_FULL_SCALE_V);
+
+    if (flow >= 0.0f)
+    {
+      rsvd_param.flowRateNow = flow;
+    }
+    Valve_SetDuty(50.0f );
     osDelay(100);
   }
   /* USER CODE END StartFlowTask */
