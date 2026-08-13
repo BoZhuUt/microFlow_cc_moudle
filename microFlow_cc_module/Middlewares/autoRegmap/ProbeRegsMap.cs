@@ -44,13 +44,20 @@ public ProbeReg temperature2;
 }
 public class RSVD_PARAM_T
 {
-public ProbeReg flowRateNow;
+public ProbeReg flowRateVoltageAve;
 public ProbeReg flowRateAve;
-public ProbeReg aveNum;
+public ProbeReg filterFactor;
 public ProbeReg flowRateSet;
 public ProbeReg valveOpening;
 public ProbeReg manualMode;
 public ProbeReg modbusCmd2;
+public ProbeReg lowFlow;
+public ProbeReg highFlow;
+public ProbeReg lowFlowVoltage;
+public ProbeReg highFlowVoltage;
+public ProbeReg PID_P;
+public ProbeReg PID_I;
+public ProbeReg PID_D;
 }
     public class ProbeRegsMap
     {
@@ -85,13 +92,20 @@ measure_settings .command = new ProbeReg("command", "uint16_t",43005, mb);
 measure_values .tecPowerNow = new ProbeReg("tecPowerNow", "float",46000, mb);
 measure_values .temperature1 = new ProbeReg("temperature1", "float",46002, mb);
 measure_values .temperature2 = new ProbeReg("temperature2", "float",46004, mb);
-rsvd_param .flowRateNow = new ProbeReg("flowRateNow", "float",48000, mb);
+rsvd_param .flowRateVoltageAve = new ProbeReg("flowRateVoltageAve", "float",48000, mb);
 rsvd_param .flowRateAve = new ProbeReg("flowRateAve", "float",48002, mb);
-rsvd_param .aveNum = new ProbeReg("aveNum", "float",48004, mb);
+rsvd_param .filterFactor = new ProbeReg("filterFactor", "float",48004, mb);
 rsvd_param .flowRateSet = new ProbeReg("flowRateSet", "float",48006, mb);
 rsvd_param .valveOpening = new ProbeReg("valveOpening", "float",48008, mb);
 rsvd_param .manualMode = new ProbeReg("manualMode", "uint16_t",48010, mb);
 rsvd_param .modbusCmd2 = new ProbeReg("modbusCmd2", "uint16_t",48011, mb);
+rsvd_param .lowFlow = new ProbeReg("lowFlow", "float",48012, mb);
+rsvd_param .highFlow = new ProbeReg("highFlow", "float",48014, mb);
+rsvd_param .lowFlowVoltage = new ProbeReg("lowFlowVoltage", "float",48016, mb);
+rsvd_param .highFlowVoltage = new ProbeReg("highFlowVoltage", "float",48018, mb);
+rsvd_param .PID_P = new ProbeReg("PID_P", "float",48020, mb);
+rsvd_param .PID_I = new ProbeReg("PID_I", "float",48022, mb);
+rsvd_param .PID_D = new ProbeReg("PID_D", "float",48024, mb);
         }
     }
 }

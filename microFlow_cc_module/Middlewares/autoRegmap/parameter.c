@@ -128,13 +128,20 @@ const uint16_t default_measure_settings_command = 0;
 //measure_values default value define end
 
 //rsvd_param default value define begin
-const float default_rsvd_param_flowRateNow = 5.0f;
+const float default_rsvd_param_flowRateVoltageAve = 5.0f;
 const float default_rsvd_param_flowRateAve = 5.0f;
-const float default_rsvd_param_aveNum = 5.0f;
+const float default_rsvd_param_filterFactor = 0.1f;
 const float default_rsvd_param_flowRateSet = 5.0f;
 const float default_rsvd_param_valveOpening = 30.0f;
 const uint16_t default_rsvd_param_manualMode = 1;
 const uint16_t default_rsvd_param_modbusCmd2 = 0;
+const float default_rsvd_param_lowFlow = 0.0f;
+const float default_rsvd_param_highFlow = 30.0f;
+const float default_rsvd_param_lowFlowVoltage = 0.25f;
+const float default_rsvd_param_highFlowVoltage = 2.25f;
+const float default_rsvd_param_PID_P = 5.0f;
+const float default_rsvd_param_PID_I = 0.2f;
+const float default_rsvd_param_PID_D = 0.02f;
 //rsvd_param default value define end
 
 void ParametarsInitByDefaultValue()
@@ -175,13 +182,20 @@ void ParametarsInitByDefaultValue()
     //measure_values power on parameters init end
 
     //rsvd_param power on parameters init begin
-    rsvd_param.flowRateNow = default_rsvd_param_flowRateNow;
+    rsvd_param.flowRateVoltageAve = default_rsvd_param_flowRateVoltageAve;
     rsvd_param.flowRateAve = default_rsvd_param_flowRateAve;
-    rsvd_param.aveNum = default_rsvd_param_aveNum;
+    rsvd_param.filterFactor = default_rsvd_param_filterFactor;
     rsvd_param.flowRateSet = default_rsvd_param_flowRateSet;
     rsvd_param.valveOpening = default_rsvd_param_valveOpening;
     rsvd_param.manualMode = default_rsvd_param_manualMode;
     rsvd_param.modbusCmd2 = default_rsvd_param_modbusCmd2;
+    rsvd_param.lowFlow = default_rsvd_param_lowFlow;
+    rsvd_param.highFlow = default_rsvd_param_highFlow;
+    rsvd_param.lowFlowVoltage = default_rsvd_param_lowFlowVoltage;
+    rsvd_param.highFlowVoltage = default_rsvd_param_highFlowVoltage;
+    rsvd_param.PID_P = default_rsvd_param_PID_P;
+    rsvd_param.PID_I = default_rsvd_param_PID_I;
+    rsvd_param.PID_D = default_rsvd_param_PID_D;
     //rsvd_param power on parameters init end
 
 }
@@ -217,13 +231,20 @@ uint8_t CheckParamyDefaultSetting()
         //measure_values check parameters end
 
         //rsvd_param check parameters begin
-       update_flg += CheckFloat(&rsvd_param.flowRateNow, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateNow);
+       update_flg += CheckFloat(&rsvd_param.flowRateVoltageAve, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateVoltageAve);
        update_flg += CheckFloat(&rsvd_param.flowRateAve, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateAve);
-       update_flg += CheckFloat(&rsvd_param.aveNum, 0.01f, 100.0f, FORBID_FP_ZERO, default_rsvd_param_aveNum);
+       update_flg += CheckFloat(&rsvd_param.filterFactor, 0.0001f, 0.999f, FORBID_FP_ZERO, default_rsvd_param_filterFactor);
        update_flg += CheckFloat(&rsvd_param.flowRateSet, 0.01f, 30.0f, FORBID_FP_ZERO, default_rsvd_param_flowRateSet);
        update_flg += CheckFloat(&rsvd_param.valveOpening, 0.01f, 100.0f, FORBID_FP_ZERO, default_rsvd_param_valveOpening);
        update_flg += CheckUint16(&rsvd_param.manualMode, 0, 5, default_rsvd_param_manualMode);
        update_flg += CheckUint16(&rsvd_param.modbusCmd2, 0, 1000, default_rsvd_param_modbusCmd2);
+       update_flg += CheckFloat(&rsvd_param.lowFlow, -0.01f, 10.0f, ALLOW_FP_ZERO, default_rsvd_param_lowFlow);
+       update_flg += CheckFloat(&rsvd_param.highFlow, -0.01f, 30.0f, ALLOW_FP_ZERO, default_rsvd_param_highFlow);
+       update_flg += CheckFloat(&rsvd_param.lowFlowVoltage, 0.1f, 1.0f, FORBID_FP_ZERO, default_rsvd_param_lowFlowVoltage);
+       update_flg += CheckFloat(&rsvd_param.highFlowVoltage, 0.1f, 3.3f, FORBID_FP_ZERO, default_rsvd_param_highFlowVoltage);
+       update_flg += CheckFloat(&rsvd_param.PID_P, 0.01f, 1000.0f, FORBID_FP_ZERO, default_rsvd_param_PID_P);
+       update_flg += CheckFloat(&rsvd_param.PID_I, 0.01f, 1000.0f, FORBID_FP_ZERO, default_rsvd_param_PID_I);
+       update_flg += CheckFloat(&rsvd_param.PID_D, 0.01f, 1000.0f, FORBID_FP_ZERO, default_rsvd_param_PID_D);
         //rsvd_param check parameters end
 
 	}

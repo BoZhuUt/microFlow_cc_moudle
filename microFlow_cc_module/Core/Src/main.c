@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "modbus.h"
 #include "app.h"
+#include "pid.h"
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -38,12 +39,14 @@
 #define FLOW_ADC_VREF_V          3.3f
 #define FLOW_ADC_FULL_SCALE      4095.0f
 #define FLOW_ADC_ERROR_VALUE     (-1.0f)
-#define FLOW_ADC_AVERAGE_COUNT   10U
-#define FLOW_ZERO_ML_MIN         0.0f
-#define FLOW_FULL_SCALE_ML_MIN   30.0f
-#define FLOW_ZERO_V              0.0f
-#define FLOW_FULL_SCALE_V        2.25f
 
+/* ---- 恒流闭环参数(依据附录A实测整定) ---- */
+#define FLOW_TASK_PERIOD_MS      100U                            /* 控制周期 ms */
+#define FLOW_TASK_DT_S           (FLOW_TASK_PERIOD_MS / 1000.0f) /* 控制周期 s */
+#define FLOW_ADC_SAMPLE_COUNT    20U     /* ADC中值滤波固定采样次数 */
+#define FLOW_PID_OUT_MIN         35.0f   /* 阀门死区下沿(<35%不开) */
+#define FLOW_PID_OUT_MAX         99.0f   /* PID输出上限%(放开, 原70基于主回路分流分析) */
+#define FLOW_PID_DEADBAND        0.1f    /* 死区 mL/min, 抑制阀门抖动 */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -519,6 +522,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
@@ -529,6 +533,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB6 PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -630,6 +640,45 @@ float getAdcVoltage(uint16_t num)
 
 /**
   * @author Bo
+  * @date   Created: 2026-08-11
+  * @brief  读取流量计电压(固定20次采样 + 修剪均值滤波)
+  * @retval 输入电压(V), 或 FLOW_ADC_ERROR_VALUE
+  * @note   去1个最大1个最小后求平均, 比单纯均值更抗脉冲干扰;
+  *         采样次数由 FLOW_ADC_SAMPLE_COUNT 固定, 不受寄存器控制
+  */
+float getAdcVoltageMedian(void)
+{
+  uint32_t sum = 0U;
+  uint16_t maxv = 0U;
+  uint16_t minv = 0xFFFFU;
+  uint16_t raw;
+  uint16_t i;
+
+  for (i = 0U; i < FLOW_ADC_SAMPLE_COUNT; i++)
+  {
+    if (FlowAdc_ReadRaw(&raw) != HAL_OK)
+    {
+      return FLOW_ADC_ERROR_VALUE;
+    }
+    sum += raw;
+    if (raw > maxv)
+    {
+      maxv = raw;
+    }
+    if (raw < minv)
+    {
+      minv = raw;
+    }
+  }
+
+  /* 修剪均值: 去最大最小后平均剩余 (FLOW_ADC_SAMPLE_COUNT-2) 个 */
+  sum = sum - (uint32_t)maxv - (uint32_t)minv;
+  return ((float)sum / (float)(FLOW_ADC_SAMPLE_COUNT - 2U)) *
+         FLOW_ADC_VREF_V / FLOW_ADC_FULL_SCALE;
+}
+
+/**
+  * @author Bo
   * @date   Created: 2026-08-10
   * @date   Modified: 2026-08-10
   * @brief  Convert the averaged ADC voltage to flow using two-point scaling.
@@ -696,6 +745,106 @@ void Valve_SetDuty(float dutyPercent)
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, compare);
 }
 
+/* ======================== 恒流闭环(StartFlowTask拆分) ======================== */
+/* 文件级状态: 避免向子函数传参, 任务体保持简洁 */
+static PID_Controller_t s_flowPid;           /* PID实例(Kp/Ki/Kd在线传入) */
+static uint16_t s_prevManualMode = 1U;       /* 模式切换边沿(上电默认手动) */
+static float s_voltFiltered = 0.0f;          /* 一阶低通后的电压 */
+static uint8_t s_voltFilterInit = 0U;        /* 电压滤波器首次初始化标志 */
+
+/**
+  * @brief  采样流量计: 固定20次中值滤波 + filterFactor一阶低通 + 两点标定
+  * @retval 滤波后流量 PV; <0 表示 ADC 失败(调用方应保持上次输出)
+  * @note   filterFactor(寄存器48005, 0~1) 关联电压/流量/自动模式滤波三者:
+  *         电压经一阶低通->flowRateVoltageAve; 流量由滤波电压换算->flowRateAve(PV)
+  */
+static float FlowSensor_Sample(void)
+{
+  float voltageRaw;
+  float alpha;
+
+  /* 固定20次修剪均值滤波(去最大最小), 抗脉冲干扰 */
+  voltageRaw = getAdcVoltageMedian();
+  if (voltageRaw < 0.0f)
+  {
+    return FLOW_ADC_ERROR_VALUE;            /* ADC失败: 通知调用方保持上次输出 */
+  }
+
+  /* filterFactor 一阶低通系数(寄存器48005, 范围0~1); 越界保护为无滤波 */
+  alpha = rsvd_param.filterFactor;
+  if (alpha <= 0.0f || alpha >= 1.0f)
+  {
+    alpha = 1.0f;
+  }
+
+  /* 电压一阶低通 -> flowRateVoltageAve (首次直接赋值, 避免从0慢爬) */
+  if (s_voltFilterInit == 0U)
+  {
+    s_voltFiltered = voltageRaw;
+    s_voltFilterInit = 1U;
+  }
+  else
+  {
+    s_voltFiltered = alpha * voltageRaw + (1.0f - alpha) * s_voltFiltered;
+  }
+  rsvd_param.flowRateVoltageAve = s_voltFiltered;
+
+  /* 流量由滤波电压换算(与电压同源, 保证一致) -> flowRateAve (PID的PV) */
+  if (rsvd_param.highFlowVoltage != rsvd_param.lowFlowVoltage)
+  {
+    rsvd_param.flowRateAve = rsvd_param.lowFlow +
+              (s_voltFiltered - rsvd_param.lowFlowVoltage) *
+              (rsvd_param.highFlow - rsvd_param.lowFlow) /
+              (rsvd_param.highFlowVoltage - rsvd_param.lowFlowVoltage);
+  }
+  else
+  {
+    rsvd_param.flowRateAve = 0.0f;
+  }
+  return rsvd_param.flowRateAve;
+}
+
+/**
+  * @brief  流量闭环控制: 模式切换无扰 + 手动/PID控制律 + PWM输出
+  * @param  pv 滤波后流量; <0 时保持上次开度后返回
+  */
+static void FlowControl_Run(float pv)
+{
+  float duty;
+
+  /* ADC失败: 保持上次开度, 不归零, 避免流量突冲 */
+  if (pv < 0.0f)
+  {
+    Valve_SetDuty(rsvd_param.valveOpening);
+    return;
+  }
+
+  /* 模式切换边沿 -> 无扰切换 */
+  if (rsvd_param.manualMode != s_prevManualMode)
+  {
+    if (rsvd_param.manualMode == 0U)
+    {
+      PID_Reset(&s_flowPid, rsvd_param.valveOpening);  /* 手动->自动: 预置积分, 无跳变 */
+    }
+    s_prevManualMode = rsvd_param.manualMode;
+  }
+
+  /* 控制律 */
+  if (rsvd_param.manualMode == 1U)
+  {
+    duty = rsvd_param.valveOpening;         /* 手动: 直接用寄存器设定开度 */
+  }
+  else
+  {
+    duty = PID_Compute(&s_flowPid,          /* 自动: PID闭环, 参数在线整定 */
+                       rsvd_param.PID_P, rsvd_param.PID_I, rsvd_param.PID_D,
+                       rsvd_param.flowRateSet, pv, FLOW_TASK_DT_S);
+    rsvd_param.valveOpening = duty;         /* 回写, 便于监视/手动衔接 */
+  }
+
+  Valve_SetDuty(duty);
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -726,23 +875,17 @@ void StartDefaultTask(void const * argument)
 void StartFlowTask(void const * argument)
 {
   /* USER CODE BEGIN StartFlowTask */
-  float flow;
+  float pv;
+
+  /* 初始化PID: 仅限幅/死区配置; Kp/Ki/Kd每次从寄存器读取 */
+  PID_Init(&s_flowPid, FLOW_PID_OUT_MIN, FLOW_PID_OUT_MAX, FLOW_PID_DEADBAND);
 
   /* Infinite loop */
   for(;;)
   {
-    flow = getFlow(FLOW_ADC_AVERAGE_COUNT,
-                   FLOW_ZERO_ML_MIN,
-                   FLOW_FULL_SCALE_ML_MIN,
-                   FLOW_ZERO_V,
-                   FLOW_FULL_SCALE_V);
-
-    if (flow >= 0.0f)
-    {
-      rsvd_param.flowRateNow = flow;
-    }
-    Valve_SetDuty(50.0f );
-    osDelay(100);
+    pv = FlowSensor_Sample();    /* 采样+标定+低通, 更新 flowRateAve/VoltageAve */
+    FlowControl_Run(pv);         /* 模式切换无扰 + 手动/PID控制律 + PWM输出 */
+    osDelay(FLOW_TASK_PERIOD_MS);
   }
   /* USER CODE END StartFlowTask */
 }
