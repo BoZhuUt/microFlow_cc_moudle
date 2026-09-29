@@ -105,7 +105,7 @@ const uint16_t default_system_status_measureTarget = 0;
 //system_status default value define end
 
 //comm_settings default value define begin
-const uint16_t default_comm_settings_modbusAddr = 10;
+const uint16_t default_comm_settings_modbusAddr = 20;
 const uint16_t default_comm_settings_modbusDatabits = 8;
 const uint16_t default_comm_settings_modbusParity = 2;
 const uint32_t default_comm_settings_modbusBaud = 9600;

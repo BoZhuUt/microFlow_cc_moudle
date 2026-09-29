@@ -76,11 +76,64 @@ extern UART_HandleTypeDef huart2;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
+  /* Inspect nmi_debug in the debugger after capture_complete becomes 1.
+   * Preserve the fault flags; do not read the suspect Flash contents here.
+   * Static storage and volatile keep the snapshot available in the debugger.
+   */
+  static volatile struct
+  {
+    uint32_t flash_eccr;
+    uint32_t flash_sr;
+    uint32_t flash_cr;
+    uint32_t flash_acr;
+    uint32_t rcc_cr;
+    uint32_t rcc_cifr;
+    uint32_t rcc_csr;
+    uint32_t syscfg_cfgr2;
+    uint32_t ipsr;
+    uint32_t icsr;
+    uint32_t shcsr;
+    uint32_t hfsr;
+    uint32_t cfsr;
+    uint32_t flash_size_kb;
+    uint32_t ecc_double_error;
+    uint32_t ecc_single_error;
+    uint32_t ecc_system_flash;
+    uint32_t ecc_address_offset;
+    uint32_t capture_complete;
+  } nmi_debug;
+
+  nmi_debug.flash_eccr = FLASH->ECCR;
+  nmi_debug.flash_sr = FLASH->SR;
+  nmi_debug.flash_cr = FLASH->CR;
+  nmi_debug.flash_acr = FLASH->ACR;
+  nmi_debug.rcc_cr = RCC->CR;
+  nmi_debug.rcc_cifr = RCC->CIFR;
+  nmi_debug.rcc_csr = RCC->CSR;
+  nmi_debug.syscfg_cfgr2 = SYSCFG->CFGR2;
+  nmi_debug.ipsr = __get_IPSR();
+  nmi_debug.icsr = SCB->ICSR;
+  nmi_debug.shcsr = SCB->SHCSR;
+  nmi_debug.hfsr = SCB->HFSR;
+  nmi_debug.cfsr = SCB->CFSR;
+  nmi_debug.flash_size_kb =
+      *(volatile const uint16_t *)FLASH_SIZE_DATA_REGISTER;
+  nmi_debug.ecc_double_error =
+      (nmi_debug.flash_eccr & FLASH_ECCR_ECCD) != 0U;
+  nmi_debug.ecc_single_error =
+      (nmi_debug.flash_eccr & FLASH_ECCR_ECCC) != 0U;
+  nmi_debug.ecc_system_flash =
+      (nmi_debug.flash_eccr & FLASH_ECCR_SYSF_ECC) != 0U;
+  /* Valid only when an ECC flag is set; this is an offset, not a pointer. */
+  nmi_debug.ecc_address_offset =
+      nmi_debug.flash_eccr & FLASH_ECCR_ADDR_ECC;
+  nmi_debug.capture_complete = 1U;
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-   while (1)
+  while (1)
   {
+    __NOP(); /* Set a breakpoint here to inspect the completed snapshot. */
   }
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }

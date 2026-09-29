@@ -80,7 +80,7 @@ HAL_StatusTypeDef STMFLASH_Erase(uint32_t e_addr) {
 
   pEraseInit.Banks = FLASH_BANK_1;                  // 擦除Bank1
   pEraseInit.NbPages = 1;                           // 擦除扇区的个数
-  pEraseInit.Page = REG_STORAGE_OFFSET / PAGE_SIZE; // 擦除Page70
+  pEraseInit.Page = REG_STORAGE_OFFSET / PAGE_SIZE; // 擦除参数存储页
   pEraseInit.TypeErase = FLASH_TYPEERASE_PAGES;     // 擦除类型Page
   status = HAL_FLASHEx_Erase(&pEraseInit, &PageError);
 

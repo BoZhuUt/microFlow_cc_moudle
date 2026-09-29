@@ -4,7 +4,7 @@ modbus_addr_start(base1)	42001
 object_name	comm_settings					
 						
 type	reg_name	vaild_check	default_value	max	min	float_ctr
-uint16_t	modbusAddr	1	10	250	1	
+uint16_t	modbusAddr	1	20	250	1	
 uint16_t	modbusDatabits	1	8	9	8	
 uint16_t	modbusParity	1	2	2	0	
 uint32_t	modbusBaud	1	9600	115200	1200	

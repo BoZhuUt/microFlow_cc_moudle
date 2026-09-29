@@ -8,8 +8,8 @@
 #define REG_GROUP_NUM            6
 /* 每个寄存器组字节数 = 52个uint16_t */
 #define REG_GROUP_BYTES          104
-/* Modbus 寄存器保存偏移地址 (Page 70) */
-#define REG_STORAGE_OFFSET       ((70) * 2048)
+/* Modbus 寄存器保存偏移地址 (Page 63, 128KB Flash 的最后一页) */
+#define REG_STORAGE_OFFSET       ((63) * 2048)
 
 /* Modbus 寄存器组存储基地址 */
 #define REG_STORAGE_ADDR         (0x08000000 + REG_STORAGE_OFFSET)

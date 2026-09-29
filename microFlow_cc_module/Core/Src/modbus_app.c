@@ -34,7 +34,7 @@ volatile uint32_t dbg_flash_err_sr = 0;    /* Flash 状态寄存器值 */
 volatile uint8_t autoSavePending = 0;
 
 /* ----------------------- 默认参数 ----------------------------------------*/
-#define MODBUS_DEFAULT_ADDR        1
+#define MODBUS_DEFAULT_ADDR        20
 #define MODBUS_DEFAULT_BAUD        115200UL
 #define MODBUS_DEFAULT_DATABITS     8
 #define MODBUS_DEFAULT_PARITY      MB_PAR_NONE
