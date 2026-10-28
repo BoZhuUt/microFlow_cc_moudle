@@ -53,7 +53,8 @@ void MeasureFunc(void)
      * portrw.c 中每次写保持寄存器会设置 autoSavePending=1
      * 这里检测到后清零并设置保存命令
      */
-    if (autoSavePending == 1)
+    /* 同一帧写命令也会置自动保存标志。显式命令优先，避免命令 7 被保存覆盖。 */
+    if (autoSavePending == 1 && measure_settings.command == 0)
     {
         autoSavePending = 0;
         measure_settings.command = SaveToFlahCMD;
@@ -68,7 +69,9 @@ void MeasureFunc(void)
     }
     else if (measure_settings.command == JumpBootloaderCMD)
     {
-        /* 跳转 Bootloader 并复位 */
+        /* 复位后进入 Boot 的 5 秒等待窗口；上位机需切换至 9600/8N1 发送 abc。
+         * 此处不直接跳转，也不持久化升级标记。
+         */
         measure_settings.command = 0;
         HAL_Delay(200);
         __disable_irq();
