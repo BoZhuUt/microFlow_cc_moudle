@@ -28,14 +28,18 @@ preamble = r'''
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-typedef int UART_HandleTypeDef;
+typedef struct {uint32_t ErrorCode, RxXferCount;} UART_HandleTypeDef;
+typedef int HAL_StatusTypeDef;
+static UART_HandleTypeDef fake_port;
+static unsigned recoveries;
+static void recover_rx(void) { ++recoveries; }
 #define HAL_OK 0
 static uint8_t input[120000], output[10000], flash[100000];
 static unsigned in_size, in_pos, out_size, written, erases;
 static int erase_ok, valid;
 static int HAL_UART_Receive(void *p, uint8_t *d, uint16_t n, uint32_t t) {
     (void)p; (void)t;
-    if (in_pos+n > in_size) return 1;
+    if (in_pos+n > in_size) { ((UART_HandleTypeDef *)p)->RxXferCount=n; return 1; }
     memcpy(d,input+in_pos,n); in_pos+=n; return HAL_OK;
 }
 static int HAL_UART_Transmit(void *p, uint8_t *d, uint16_t n, uint32_t t) {
@@ -70,6 +74,7 @@ static void finish(void) {
     input[in_size++]=EOT; input[in_size++]=EOT; add_packet(0,empty,128);
 }
 int main(void) {
+    port=&fake_port;
     uint8_t data[1024]; memset(data,0x5a,sizeof(data));
     assert(crc16((const uint8_t *)"123456789",9)==0x31c3);
     /* Legacy host: a single EOT is ACKed, then empty header is ACKed. */
@@ -96,6 +101,10 @@ int main(void) {
     assert(download()==0 && written==128); /* premature EOT */
     reset(); add_header(128); add_packet(1,data,128); input[in_size-1]^=1;
     add_packet(1,data,128); finish(); assert(download()==1 && written==128);
+    assert(boot_rx_diagnostic.reason==5 && recoveries>0);
+    reset(); add_header(128); input[in_size++]=STX;
+    assert(download()==0 && boot_rx_diagnostic.reason==3);
+    assert(boot_rx_diagnostic.expected==1028 && boot_rx_diagnostic.received==0);
     reset(); add_header(128); add_packet(1,data,128); valid=0; finish();
     assert(download()==0);
     reset(); add_header(128); /* no data: bounded timeout */
@@ -119,7 +128,7 @@ if not compiler:
 with tempfile.TemporaryDirectory(prefix="boot-tests-") as folder:
     path = Path(folder)
     defines = "\n".join(line for line in header.splitlines() if line.startswith("#define BOOT_APP_"))
-    globals_ = source[source.index("enum {"):source.index("static void send_byte")]
+    globals_ = source[source.index("enum {"):source.index("static void recover_rx")]
     code = "#include <stdint.h>\n" + defines + preamble + globals_ + "\n".join(
         function(name) for name in ("send_byte", "crc16", "receive_packet", "header_size", "download")) + tests
     (path / "test.c").write_text(code, encoding="utf-8")

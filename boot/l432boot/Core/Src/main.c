@@ -183,7 +183,10 @@ static void MX_USART1_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
-
+  /* 与 ST_588 旧 Boot 一致，轮询收包不因 ORE 标志中止。
+   * 丢字节仍由包长度、序号反码和 CRC 检出，并请求重传。
+   */
+  SET_BIT(huart1.Instance->CR3, USART_CR3_OVRDIS);
   /* USER CODE END USART1_Init 2 */
 
 }

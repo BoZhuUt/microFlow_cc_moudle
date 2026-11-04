@@ -2,13 +2,14 @@
  * @file boot.c
  * @brief microFlow RS485 在线升级入口，兼容 ST_588 旧上位机。
  *
- * 上电等待 abc -> 菜单 1 -> YMODEM 接收 -> 复位 -> 检查向量并启动 APP。
+ * 上电等待 abc；命中后进入菜单 1 升级，未命中则 5 秒后直接跳转 APP。
  * 只覆盖 APP，末页标定/参数保持不动；中断升级后通过重新上电再次命中。
  * 提示文本、拼写及 CR/LF 是旧上位机协议的一部分，修改前需联调验证。
- * 不保存升级完成标记，image_valid 仅检查入口，不能判断固件是否完整。
+ * 不保存升级完成标记；image_valid 仅用于下载完成检查，不影响上电跳转。
  */
 #include "boot.h"
 #include <string.h>
+#include <stdio.h>
 
 enum { SOH=1, STX=2, EOT=4, ACK=6, NAK=0x15, YM_CANCEL=0x18, CRC_REQUEST='C' };
 /* SOH/STX 单独读取；这里依次保存序号、反码、最多 1024 字节数据及 CRC。 */
@@ -18,6 +19,26 @@ static char file_name[65];
 static uint32_t image_size;
 enum { RECEIVE_ERROR, RECEIVE_LIMIT, RECEIVE_DATA, RECEIVE_ABORT };
 static int receive_result;
+/* 调试器可读取；失败后也以文本输出。reason: 1=等包超时，2=非法起始，
+ * 3=包体接收失败，4=序号反码错误，5=CRC错误。
+ * reason 3～5 不被后续等包超时/非法起始覆盖；reason 2 的 start 会更新为
+ * 最近的非法字节，并非最初丢失包头的位置。各字段只在对应错误分支有效，
+ * bytes=0/0 不表示线上没有数据，uart=0 也不能排除关闭 ORE 后的丢字节。
+ */
+volatile struct {
+    uint32_t reason, uart_error, received, expected, start, sequence;
+} boot_rx_diagnostic;
+
+static void recover_rx(void) {
+    uint8_t discard;
+    uint32_t start=HAL_GetTick();
+    /* 连续 20 ms 未收到字节或总计达到 2 s 后结束残帧清理，再请求重传。
+     * 清理期间收到的数据均丢弃；此策略与旧上位机的兼容性尚待定位验证。
+     */
+    __HAL_UART_CLEAR_FLAG(port, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
+    while (HAL_GetTick()-start<2000U && HAL_UART_Receive(port, &discard, 1, 20)==HAL_OK) {}
+    __HAL_UART_CLEAR_FLAG(port, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF | UART_CLEAR_PEF);
+}
 
 static void send_byte(uint8_t v) { HAL_UART_Transmit(port, &v, 1, 1000); }
 static void message(const char *s) {
@@ -39,7 +60,10 @@ static uint16_t crc16(const uint8_t *data, uint32_t length) {
  */
 static int receive_packet(void) {
     uint8_t start;
-    if (HAL_UART_Receive(port, &start, 1, 2000) != HAL_OK) return -1;
+    if (HAL_UART_Receive(port, &start, 1, 2000) != HAL_OK) {
+        if (boot_rx_diagnostic.reason==0) boot_rx_diagnostic.reason=1;
+        return -1;
+    }
     if (start == EOT) return 0;
     if (start == 'a' || start == 'A') return -3;
     if (start == YM_CANCEL) {
@@ -47,11 +71,36 @@ static int receive_packet(void) {
         return HAL_UART_Receive(port, &next, 1, 1000) == HAL_OK && next == YM_CANCEL ? -2 : -1;
     }
     int length=start == SOH ? 128 : start == STX ? 1024 : -1;
-    if (length<0) return -1;
-    if (HAL_UART_Receive(port, packet, (uint16_t)(length+4), 5000) != HAL_OK) return -1;
-    if ((uint8_t)(packet[0]^packet[1]) != 0xFFU) return -1;
+    if (length<0) {
+        if (boot_rx_diagnostic.reason<=2) {
+            boot_rx_diagnostic.reason=2;
+            boot_rx_diagnostic.start=start;
+        }
+        return -1;
+    }
+    HAL_StatusTypeDef status=HAL_UART_Receive(port, packet, (uint16_t)(length+4), 5000);
+    if (status != HAL_OK) {
+        boot_rx_diagnostic.reason=3;
+        boot_rx_diagnostic.uart_error=port->ErrorCode;
+        boot_rx_diagnostic.received=(uint32_t)(length+4)-port->RxXferCount;
+        boot_rx_diagnostic.expected=(uint32_t)(length+4);
+        boot_rx_diagnostic.start=start;
+        boot_rx_diagnostic.sequence=packet[0];
+        return -1;
+    }
+    if ((uint8_t)(packet[0]^packet[1]) != 0xFFU) {
+        boot_rx_diagnostic.reason=4;
+        boot_rx_diagnostic.sequence=packet[0];
+        return -1;
+    }
     uint16_t expected=(uint16_t)((packet[length+2]<<8)|packet[length+3]);
-    return crc16(packet+2, (uint32_t)length) == expected ? length : -1;
+    if (crc16(packet+2, (uint32_t)length) != expected) {
+        boot_rx_diagnostic.reason=5;
+        boot_rx_diagnostic.sequence=packet[0];
+        boot_rx_diagnostic.received=boot_rx_diagnostic.expected=(uint32_t)(length+4);
+        return -1;
+    }
+    return length;
 }
 /* 当前 APP 栈位于 SRAM1，允许栈顶恰为 0x2000C000。
  * Reset_Handler 必须为 Thumb 地址且落在 APP 区；不代替整包校验。
@@ -132,6 +181,7 @@ static int download(void) {
     int started=0, eot_seen=0;
     receive_result=RECEIVE_ERROR;
     image_size=0;
+    memset((void *)&boot_rx_diagnostic, 0, sizeof(boot_rx_diagnostic));
     /* 旧上位机收到 Waiting 后开始握手；首次 C 在 2 秒超时后发出。
      * 首包前不累计超时，允许操作者准备文件；传输开始后累计 6 次退出。
      */
@@ -147,6 +197,7 @@ static int download(void) {
             goto fail;
         }
         if (length<0) {
+            recover_rx();
             if (started && ++errors>=6) goto fail;
             send_byte(CRC_REQUEST);
             continue;
@@ -249,7 +300,8 @@ void Boot_Run(UART_HandleTypeDef *uart) {
         matched=value==(uint8_t)trigger[matched] ? matched+1 : value=='a' ? 1 : 0;
         if (matched==3) break;
     }
-    if (matched!=3 && image_valid()) {
+    /* 按维护约定：不检查 APP，只有 abc 命中才能进入下载菜单。 */
+    if (matched!=3) {
         message("Jump to App...\r\n");
         jump_app();
     }
@@ -288,6 +340,15 @@ void Boot_Run(UART_HandleTypeDef *uart) {
         default:
             message("\n\rFailed to receive the file!\n\r");
             break;
+        }
+        if (boot_rx_diagnostic.reason) {
+            char diagnostic[144];
+            snprintf(diagnostic, sizeof(diagnostic),
+                     "\r\nRX diagnostic: reason=%lu uart=%lu bytes=%lu/%lu start=%02lX seq=%lu\r\n",
+                     (unsigned long)boot_rx_diagnostic.reason, (unsigned long)boot_rx_diagnostic.uart_error,
+                     (unsigned long)boot_rx_diagnostic.received, (unsigned long)boot_rx_diagnostic.expected,
+                     (unsigned long)boot_rx_diagnostic.start, (unsigned long)boot_rx_diagnostic.sequence);
+            message(diagnostic);
         }
     }
 }

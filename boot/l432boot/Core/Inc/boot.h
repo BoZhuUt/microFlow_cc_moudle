@@ -8,7 +8,7 @@
 #define BOOT_APP_END     0x0801F800UL /* Exclusive: parameter page remains intact. */
 #define BOOT_APP_SIZE    (BOOT_APP_END - BOOT_APP_ADDRESS)
 /* 时钟及 RS485 串口初始化后调用；固定 9600/8N1，不返回正常主循环。
- * 未命中且 APP 入口合法时跳转；否则进入旧上位机兼容的升级菜单。
+ * 5 秒内未命中 abc 就直接跳转 APP；只有命中才进入升级菜单。
  */
 void Boot_Run(UART_HandleTypeDef *uart);
 #endif
