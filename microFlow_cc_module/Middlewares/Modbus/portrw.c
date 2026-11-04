@@ -2,6 +2,7 @@
 #include "portrw.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include <string.h>
 
 //寄存器地址间距
 #define INDEX_BASE	1000	
@@ -15,9 +16,8 @@
   */
 eMBErrorCode eMBRegInputCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs )
 {
-	volatile uint8_t test;
 	uint16_t iRegIndex,uRegs;
-	uint16_t *data_pointer;
+	uint16_t *data_pointer = 0;
 	eMBErrorCode eStatus = MB_ENOERR;
 
 	uRegs= usAddress/INDEX_BASE;
@@ -66,6 +66,56 @@ eMBErrorCode eMBRegInputCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRe
   * @retval 错误代码
   */
 char MBAddr_w=0;
+
+/* 48xxx directly addresses the 104-register RSVD_PARAM_T. */
+static eMBErrorCode FlowRegistersCB(UCHAR *buffer, USHORT start, USHORT count,
+                                   eMBRegisterMode mode)
+{
+    uint32_t end = (uint32_t)start + count;
+    uint16_t address, word;
+    if (count == 0U || start < 48001U || end > RSVD_SADDR + RSVD_NREGS) return MB_ENOREG;
+    if (mode != MB_REG_READ && mode != MB_REG_WRITE) return MB_EINVAL;
+    if (mode == MB_REG_WRITE)
+    {
+        /* Validate the entire request before modifying any register. */
+        if ((start <= 48028U && end > 48028U) ||
+            (start < 48033U && end > 48031U) || (start < 48097U && end > 48083U))
+            return MB_ENOREG;
+        if (start <= 48011U && end > 48011U)
+        {
+            uint16_t offset = (48011U - start) * 2U;
+            word = ((uint16_t)buffer[offset] << 8) | buffer[offset + 1U];
+            if (word > 2U) return MB_EINVAL;
+        }
+        if (start <= 48027U && end > 48027U)
+        {
+            uint16_t offset = (48027U - start) * 2U;
+            word = ((uint16_t)buffer[offset] << 8) | buffer[offset + 1U];
+            if (word > 1U) return MB_EINVAL;
+        }
+    }
+    taskENTER_CRITICAL();
+    for (address = start; address < end; address++)
+    {
+        uint8_t *pointer = (uint8_t *)&rsvd_param + (address - RSVD_SADDR) * 2U;
+        if (mode == MB_REG_READ)
+        {
+            memcpy(&word, pointer, sizeof(word));
+            *buffer++ = (uint8_t)(word >> 8);
+            *buffer++ = (uint8_t)word;
+        }
+        else
+        {
+            word = (uint16_t)*buffer++ << 8;
+            word |= *buffer++;
+            memcpy(pointer, &word, sizeof(word));
+        }
+    }
+    if (mode == MB_REG_WRITE) autoSavePending = 1;
+    taskEXIT_CRITICAL();
+    return MB_ENOERR;
+}
+
 eMBErrorCode eMBRegHoldingCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs,eMBRegisterMode eMode )
 {	
 	uint16_t iRegIndex,uRegs;
@@ -73,7 +123,10 @@ eMBErrorCode eMBRegHoldingCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usN
 	eMBErrorCode eStatus = MB_ENOERR;		
 	
 	uRegs= usAddress/INDEX_BASE;
-	
+	if (uRegs == RSVD_FLAG) return FlowRegistersCB(pucRegBuffer, usAddress, usNRegs, eMode);
+	/* Reject group address zero (would underflow iRegIndex), and empty requests. */
+	if (usNRegs == 0U || usAddress % INDEX_BASE == 0U) return MB_ENOREG;
+
 	//根据地址确定要访问的寄存器
 	switch( uRegs )
 	{
@@ -122,17 +175,6 @@ eMBErrorCode eMBRegHoldingCB( UCHAR * pucRegBuffer, USHORT usAddress, USHORT usN
 			if(usAddress + usNRegs <= FSREG_SADDR + FSREG_NREGS)
 			{
 				data_pointer= (void *)&filter_settings;
-			}
-			else
-			{
-				eStatus=MB_ENOREG;
-			}
-			break;
-		//DO专有寄存器
-		case RSVD_FLAG :
-			if(usAddress + usNRegs <= RSVD_SADDR + RSVD_NREGS)
-			{
-				data_pointer= (void *)&rsvd_param;
 			}
 			else
 			{

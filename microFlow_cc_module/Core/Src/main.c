@@ -25,6 +25,10 @@
 #include "modbus.h"
 #include "app.h"
 #include "pid.h"
+#include "flow_ramp.h"
+#include "parameter_storage.h"
+#include "flow_scale.h"
+#include <math.h>
 #include <string.h>
 /* USER CODE END Includes */
 
@@ -44,7 +48,7 @@
 #define FLOW_TASK_PERIOD_MS      100U                            /* 控制周期 ms */
 #define FLOW_TASK_DT_S           (FLOW_TASK_PERIOD_MS / 1000.0f) /* 控制周期 s */
 #define FLOW_ADC_SAMPLE_COUNT    20U     /* ADC中值滤波固定采样次数 */
-#define FLOW_PID_OUT_MIN         35.0f   /* 阀门死区下沿(<35%不开) */
+#define FLOW_PID_OUT_MIN         20.0f   /* 实测20~30%仍有响应，允许PID在此区间调节 */
 #define FLOW_PID_OUT_MAX         99.0f   /* PID输出上限%(放开, 原70基于主回路分流分析) */
 #define FLOW_PID_DEADBAND        0.1f    /* 死区 mL/min, 抑制阀门抖动 */
 /* USER CODE END PD */
@@ -748,7 +752,11 @@ void Valve_SetDuty(float dutyPercent)
 /* ======================== 恒流闭环(StartFlowTask拆分) ======================== */
 /* 文件级状态: 避免向子函数传参, 任务体保持简洁 */
 static PID_Controller_t s_flowPid;           /* PID实例(Kp/Ki/Kd在线传入) */
-static uint16_t s_prevManualMode = 1U;       /* 模式切换边沿(上电默认手动) */
+static uint16_t s_prevManualMode = 1U;       /* 上电恢复0/2时触发初始化；首次出厂默认1 */
+static FlowRamp s_ramp;
+static FLOW_RAMP_CONFIG_T s_rampConfig;
+static uint32_t s_controlTick;
+static float s_lastDuty;
 static float s_voltFiltered = 0.0f;          /* 一阶低通后的电压 */
 static uint8_t s_voltFilterInit = 0U;        /* 电压滤波器首次初始化标志 */
 
@@ -772,7 +780,7 @@ static float FlowSensor_Sample(void)
 
   /* filterFactor 一阶低通系数(寄存器48005, 范围0~1); 越界保护为无滤波 */
   alpha = rsvd_param.filterFactor;
-  if (alpha <= 0.0f || alpha >= 1.0f)
+  if (!isfinite(alpha) || alpha <= 0.0f || alpha >= 1.0f)
   {
     alpha = 1.0f;
   }
@@ -790,58 +798,100 @@ static float FlowSensor_Sample(void)
   rsvd_param.flowRateVoltageAve = s_voltFiltered;
 
   /* 流量由滤波电压换算(与电压同源, 保证一致) -> flowRateAve (PID的PV) */
-  if (rsvd_param.highFlowVoltage != rsvd_param.lowFlowVoltage)
+  if (!FlowScale_Convert(rsvd_param.flowScaleModel, s_voltFiltered,
+                         rsvd_param.lowFlow, rsvd_param.highFlow,
+                         rsvd_param.lowFlowVoltage, rsvd_param.highFlowVoltage,
+                         rsvd_param.flowFullScale, &rsvd_param.flowRateAve))
   {
-    rsvd_param.flowRateAve = rsvd_param.lowFlow +
-              (s_voltFiltered - rsvd_param.lowFlowVoltage) *
-              (rsvd_param.highFlow - rsvd_param.lowFlow) /
-              (rsvd_param.highFlowVoltage - rsvd_param.lowFlowVoltage);
-  }
-  else
-  {
-    rsvd_param.flowRateAve = 0.0f;
+    return FLOW_ADC_ERROR_VALUE; /* Invalid calibration is not a zero-flow reading. */
   }
   return rsvd_param.flowRateAve;
 }
 
 /**
   * @brief  流量闭环控制: 模式切换无扰 + 手动/PID控制律 + PWM输出
-  * @param  pv 滤波后流量; <0 时保持上次开度后返回
+  * @param  pv 滤波后流量; 无效时自动模式保持输出，手动模式仍执行开度指令
   */
+static void FlowRamp_Publish(void)
+{
+  taskENTER_CRITICAL();
+  rsvd_param.rampState = s_ramp.state;
+  rsvd_param.rampFault = s_ramp.fault;
+  rsvd_param.rampTarget = s_ramp.target;
+  rsvd_param.rampElapsedMs = s_ramp.elapsedMs;
+  rsvd_param.rampHoldMs = s_ramp.holdMs;
+  rsvd_param.rampStableMs = s_ramp.stableMs;
+  rsvd_param.rampLimitMs = s_ramp.limitMs;
+  rsvd_param.rampCycles = s_ramp.cycles;
+  taskEXIT_CRITICAL();
+}
+
 static void FlowControl_Run(float pv)
 {
   float duty;
+  uint16_t mode = rsvd_param.manualMode;
+  uint32_t now = HAL_GetTick();
+  uint32_t dtMs = now - s_controlTick; /* Handles HAL tick wrap. */
+  int valid = isfinite(pv) && pv >= 0.0f;
+  s_controlTick = now;
 
-  /* ADC失败: 保持上次开度, 不归零, 避免流量突冲 */
-  if (pv < 0.0f)
+  if (mode != s_prevManualMode)
   {
-    Valve_SetDuty(rsvd_param.valveOpening);
+    if (mode == 2U)
+    {
+      taskENTER_CRITICAL();
+      RsvdParam_GetRamp(&rsvd_param, &s_rampConfig);
+      taskEXIT_CRITICAL();
+      FlowRamp_Start(&s_ramp, &s_rampConfig);
+      dtMs = 0U;
+    }
+    else
+    {
+      memset(&s_ramp, 0, sizeof(s_ramp));
+    }
+    s_flowPid.outMin = mode == 2U && s_ramp.fault == RAMP_OK ?
+                        s_ramp.config.rampValveMin : FLOW_PID_OUT_MIN;
+    s_flowPid.outMax = mode == 2U && s_ramp.fault == RAMP_OK ?
+                        s_ramp.config.rampValveMax : FLOW_PID_OUT_MAX;
+    s_flowPid.deadband = mode == 2U && s_ramp.fault == RAMP_OK ?
+                        fminf(FLOW_PID_DEADBAND, s_ramp.config.rampTolerance) :
+                        FLOW_PID_DEADBAND;
+    if (mode == 0U || mode == 2U) PID_Reset(&s_flowPid, s_lastDuty);
+    s_prevManualMode = mode;
+  }
+
+  if (mode == 2U)
+  {
+    /* Deadlines must advance even when ADC acquisition fails. */
+    FlowRamp_Update(&s_ramp, dtMs, pv, valid, s_lastDuty);
+  }
+  FlowRamp_Publish();
+
+  /* A manual takeover must work even if the flow sensor fails. Automatic modes
+   * hold the last output on invalid feedback; ramp faults latch until mode exit. */
+  if ((mode != 1U && !valid) || (mode == 2U && s_ramp.fault != RAMP_OK) || mode > 2U)
+  {
+    rsvd_param.valveOpening = s_lastDuty;
+    Valve_SetDuty(s_lastDuty);
     return;
   }
 
-  /* 模式切换边沿 -> 无扰切换 */
-  if (rsvd_param.manualMode != s_prevManualMode)
+  if (mode == 1U)
   {
-    if (rsvd_param.manualMode == 0U)
-    {
-      PID_Reset(&s_flowPid, rsvd_param.valveOpening);  /* 手动->自动: 预置积分, 无跳变 */
-    }
-    s_prevManualMode = rsvd_param.manualMode;
-  }
-
-  /* 控制律 */
-  if (rsvd_param.manualMode == 1U)
-  {
-    duty = rsvd_param.valveOpening;         /* 手动: 直接用寄存器设定开度 */
+    duty = rsvd_param.valveOpening;
   }
   else
   {
-    duty = PID_Compute(&s_flowPid,          /* 自动: PID闭环, 参数在线整定 */
+    duty = PID_Compute(&s_flowPid,
                        rsvd_param.PID_P, rsvd_param.PID_I, rsvd_param.PID_D,
-                       rsvd_param.flowRateSet, pv, FLOW_TASK_DT_S);
-    rsvd_param.valveOpening = duty;         /* 回写, 便于监视/手动衔接 */
+                       mode == 2U ? s_ramp.target : rsvd_param.flowRateSet,
+                       pv, FLOW_TASK_DT_S);
   }
-
+  if (!isfinite(duty)) duty = s_lastDuty;
+  if (duty < 0.0f) duty = 0.0f;
+  if (duty > 100.0f) duty = 100.0f;
+  s_lastDuty = duty;
+  rsvd_param.valveOpening = duty;
   Valve_SetDuty(duty);
 }
 
@@ -879,6 +929,11 @@ void StartFlowTask(void const * argument)
 
   /* 初始化PID: 仅限幅/死区配置; Kp/Ki/Kd每次从寄存器读取 */
   PID_Init(&s_flowPid, FLOW_PID_OUT_MIN, FLOW_PID_OUT_MAX, FLOW_PID_DEADBAND);
+  s_controlTick = HAL_GetTick();
+  s_lastDuty = rsvd_param.valveOpening;
+  if (!isfinite(s_lastDuty)) s_lastDuty = 30.0f;
+  if (s_lastDuty < 0.0f) s_lastDuty = 0.0f;
+  if (s_lastDuty > 100.0f) s_lastDuty = 100.0f;
 
   /* Infinite loop */
   for(;;)

@@ -41,6 +41,7 @@ public class MEASURE_VALUES_T
 public ProbeReg tecPowerNow;
 public ProbeReg temperature1;
 public ProbeReg temperature2;
+
 }
 public class RSVD_PARAM_T
 {
@@ -58,6 +59,34 @@ public ProbeReg highFlowVoltage;
 public ProbeReg PID_P;
 public ProbeReg PID_I;
 public ProbeReg PID_D;
+public ProbeReg flowScaleModel;
+public ProbeReg flowScaleVersion;
+public ProbeReg flowFullScale;
+public ProbeReg rampVersion;
+public ProbeReg rampCenter;
+public ProbeReg rampSpan;
+public ProbeReg rampTolerance;
+public ProbeReg rampSeconds;
+public ProbeReg rampHoldLow;
+public ProbeReg rampHoldMid;
+public ProbeReg rampHoldHigh;
+public ProbeReg rampStableSeconds;
+public ProbeReg rampMaxLow;
+public ProbeReg rampMaxMid;
+public ProbeReg rampMaxHigh;
+public ProbeReg rampLimitSeconds;
+public ProbeReg rampValveMin;
+public ProbeReg rampValveMax;
+public ProbeReg rampState;
+public ProbeReg rampFault;
+public ProbeReg rampTarget;
+public ProbeReg rampElapsedMs;
+public ProbeReg rampHoldMs;
+public ProbeReg rampStableMs;
+public ProbeReg rampLimitMs;
+public ProbeReg rampCycles;
+
+
 }
     public class ProbeRegsMap
     {
@@ -106,6 +135,32 @@ rsvd_param .highFlowVoltage = new ProbeReg("highFlowVoltage", "float",48018, mb)
 rsvd_param .PID_P = new ProbeReg("PID_P", "float",48020, mb);
 rsvd_param .PID_I = new ProbeReg("PID_I", "float",48022, mb);
 rsvd_param .PID_D = new ProbeReg("PID_D", "float",48024, mb);
+rsvd_param .rampVersion = new ProbeReg("rampVersion", "uint16_t",48030, mb);
+rsvd_param .rampCenter = new ProbeReg("rampCenter", "float",48032, mb);
+rsvd_param .rampSpan = new ProbeReg("rampSpan", "float",48034, mb);
+rsvd_param .rampTolerance = new ProbeReg("rampTolerance", "float",48036, mb);
+rsvd_param .rampSeconds = new ProbeReg("rampSeconds", "uint32_t",48038, mb);
+rsvd_param .rampHoldLow = new ProbeReg("rampHoldLow", "uint32_t",48040, mb);
+rsvd_param .rampHoldMid = new ProbeReg("rampHoldMid", "uint32_t",48042, mb);
+rsvd_param .rampHoldHigh = new ProbeReg("rampHoldHigh", "uint32_t",48044, mb);
+rsvd_param .rampStableSeconds = new ProbeReg("rampStableSeconds", "uint32_t",48046, mb);
+rsvd_param .rampMaxLow = new ProbeReg("rampMaxLow", "uint32_t",48048, mb);
+rsvd_param .rampMaxMid = new ProbeReg("rampMaxMid", "uint32_t",48050, mb);
+rsvd_param .rampMaxHigh = new ProbeReg("rampMaxHigh", "uint32_t",48052, mb);
+rsvd_param .rampLimitSeconds = new ProbeReg("rampLimitSeconds", "uint32_t",48054, mb);
+rsvd_param .rampValveMin = new ProbeReg("rampValveMin", "float",48056, mb);
+rsvd_param .rampValveMax = new ProbeReg("rampValveMax", "float",48058, mb);
+rsvd_param .rampState = new ProbeReg("rampState", "uint16_t",48082, mb);
+rsvd_param .rampFault = new ProbeReg("rampFault", "uint16_t",48083, mb);
+rsvd_param .rampTarget = new ProbeReg("rampTarget", "float",48084, mb);
+rsvd_param .rampElapsedMs = new ProbeReg("rampElapsedMs", "uint32_t",48086, mb);
+rsvd_param .rampHoldMs = new ProbeReg("rampHoldMs", "uint32_t",48088, mb);
+rsvd_param .rampStableMs = new ProbeReg("rampStableMs", "uint32_t",48090, mb);
+rsvd_param .rampLimitMs = new ProbeReg("rampLimitMs", "uint32_t",48092, mb);
+rsvd_param .rampCycles = new ProbeReg("rampCycles", "uint32_t",48094, mb);
+rsvd_param .flowScaleModel = new ProbeReg("flowScaleModel", "uint16_t",48026, mb);
+rsvd_param .flowScaleVersion = new ProbeReg("flowScaleVersion", "uint16_t",48027, mb);
+rsvd_param .flowFullScale = new ProbeReg("flowFullScale", "float",48028, mb);
         }
     }
 }

@@ -6,6 +6,7 @@
 #include "stm32l4xx_hal.h"
 #include "stm32l4xx.h"
 #include "cv.h"
+#include "flow_ramp.h"
 /* Exported_Types -------------------------------------------------------------*/
 /*2 byte aligned*/
 #pragma pack(2)
@@ -50,10 +51,7 @@ typedef struct // 43001
 //MEASURE_SETTINGS_T Define End
 
 //CALIB_SETTINGS_T Define Begin
-typedef struct // 44001
-{
-   uint16_t reserved[52];  //
-}CALIB_SETTINGS_T;
+typedef struct { uint16_t reserved[52]; } CALIB_SETTINGS_T;
 //CALIB_SETTINGS_T Define End
 
 //FILTER_SETTINGS_T Define Begin
@@ -69,7 +67,7 @@ typedef struct // 46001
    float tecPowerNow;  //46001
    float temperature1;  //46003
    float temperature2;  //46005
-   uint16_t reserved[46];  //
+   uint16_t reserved[46];
 }MEASURE_VALUES_T;
 //MEASURE_VALUES_T Define End
 
@@ -90,7 +88,35 @@ typedef struct // 48001
    float PID_P;  //48021
    float PID_I;  //48023
    float PID_D;  //48025
-   uint16_t reserved[26];  //
+   uint16_t flowScaleModel;    //48027: 0 linear, 1 example thermal template
+   uint16_t flowScaleVersion;  //48028: migration marker, read-only
+   float flowFullScale;        //48029: template full scale in mL/min
+    uint16_t rampVersion;       /* 48031 */
+    uint16_t rampReserved;      /* 48032 */
+    float rampCenter;           /* 48033: A, mL/min */
+    float rampSpan;             /* 48035: B, mL/min */
+    float rampTolerance;        /* 48037: absolute flow tolerance */
+    uint32_t rampSeconds;       /* 48039: one-way ramp, excludes holds */
+    uint32_t rampHoldLow;       /* 48041: effective hold seconds */
+    uint32_t rampHoldMid;       /* 48043 */
+    uint32_t rampHoldHigh;      /* 48045 */
+    uint32_t rampStableSeconds; /* 48047: continuous settling confirmation */
+    uint32_t rampMaxLow;        /* 48049: total point-stage budget */
+    uint32_t rampMaxMid;        /* 48051 */
+    uint32_t rampMaxHigh;       /* 48053 */
+    uint32_t rampLimitSeconds;  /* 48055: continuous unreachable confirmation */
+    float rampValveMin;         /* 48057: effective valve lower limit, % */
+    float rampValveMax;         /* 48059: valve upper limit, % */
+    uint16_t rampReservedWords[22];
+   uint16_t rampState;          //48083
+   uint16_t rampFault;          //48084
+   float rampTarget;            //48085
+   uint32_t rampElapsedMs;      //48087
+   uint32_t rampHoldMs;         //48089
+   uint32_t rampStableMs;       //48091
+   uint32_t rampLimitMs;        //48093
+   uint32_t rampCycles;         //48095
+   uint16_t reserved[8]; //48097..48104
 }RSVD_PARAM_T;
 //RSVD_PARAM_T Define End
 

@@ -38,7 +38,7 @@ typedef struct {
 /**
   * @brief  初始化 PID 实例
   * @param  pid       实例指针
-  * @param  outMin    输出下限 (%)，如阀门死区下沿 35.0
+  * @param  outMin    输出下限 (%)，如实测有效开度下限 20.0
   * @param  outMax    输出上限 (%)，如主回路分流临界 70.0
   * @param  deadband  死区（与 SP/PV 同量纲，如 0.1 mL/min）
   */

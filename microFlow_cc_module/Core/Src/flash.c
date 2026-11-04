@@ -4,6 +4,7 @@
 #include "parameter.h"
 #include "portrw.h"
 #include "version.h"
+#include "parameter_storage.h"
 #include "stdio.h"
 #include "string.h"
 
@@ -14,11 +15,16 @@ CALIB_SETTINGS_T calib_settingsf;
 FILTER_SETTINGS_T filter_settingsf;
 MEASURE_VALUES_T measure_valuesf;
 RSVD_PARAM_T rsvd_paramf;
+static RSVD_PARAM_T s_rsvdFlashImage;
+
+_Static_assert(RSVD_LAYOUT_TAG_ADDR + 8U <= REG_STORAGE_ADDR + PAGE_SIZE,
+               "Extended parameters must fit the reserved Flash page");
+_Static_assert(sizeof(RSVD_PARAM_T) == RSVD_STORAGE_BYTES, "RSVD Flash size mismatch");
 
 typedef struct {
   void *pData;    // 指向modbus相关寄存器的数据指针
   uint32_t addr;  // 寄存器组Flash存储地址
-  uint16_t nbyte; // 寄存器组字节数
+  uint16_t nregs; // Number of 16-bit registers, not bytes.
 } REG_STORE_TypeDef;
 
 REG_STORE_TypeDef RegsStoreInfArr
@@ -46,7 +52,7 @@ void LoadRegsFromFactory() {
          REG_GROUP_BYTES);
   memcpy((void *)&calib_settings, (void *)&calib_settingsf, REG_GROUP_BYTES);
   memcpy((void *)&filter_settings, (void *)&filter_settingsf, REG_GROUP_BYTES);
-  memcpy((void *)&rsvd_param, (void *)&rsvd_paramf, REG_GROUP_BYTES);
+  memcpy((void *)&rsvd_param, (void *)&rsvd_paramf, sizeof(rsvd_param));
   CheckParam();
   __disable_irq();
   StoreModbusRegs();
@@ -60,7 +66,7 @@ void SaveRegsToFactory() {
          REG_GROUP_BYTES);
   memcpy((void *)&calib_settingsf, (void *)&calib_settings, REG_GROUP_BYTES);
   memcpy((void *)&filter_settingsf, (void *)&filter_settings, REG_GROUP_BYTES);
-  memcpy((void *)&rsvd_paramf, (void *)&rsvd_param, REG_GROUP_BYTES);
+  RsvdParam_PrepareFlash(&rsvd_paramf, &rsvd_param);
   __disable_irq();
   StoreModbusRegs();
   __enable_irq();
@@ -92,20 +98,26 @@ HAL_StatusTypeDef STMFLASH_Erase(uint32_t e_addr) {
 /**
  * @brief  保存数据到stm32内部flash
  * @param  pdata:数据指针
- *         nbyte:写入字节数
+ *         nregs: number of 16-bit registers (multiple of 4)
  * @retval 执行状态
  */
 static HAL_StatusTypeDef STMFLASH_Write(void *pdata, uint32_t addr,
-                                        uint8_t nbyte) {
+                                        uint16_t nregs) {
   HAL_StatusTypeDef status = HAL_OK;
-  uint64_t *pd = pdata;
+  const uint8_t *bytes = pdata;
+  uint64_t value;
+  if (addr == RSVD_PARA_SADDR || addr == RSVD_PARA_SADDR_F) {
+    RsvdParam_PrepareFlash(&s_rsvdFlashImage, pdata);
+    bytes = (const uint8_t *)&s_rsvdFlashImage;
+  }
   HAL_FLASH_Unlock();
   uint8_t i = 0;
   // 写入数据
-  for (; i < (nbyte / 4) && status == HAL_OK; i++) {
-    status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, addr, *pd);
+  for (; i < (nregs / 4) && status == HAL_OK; i++) {
+    memcpy(&value, bytes, sizeof(value));
+    status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, addr, value);
     addr += 8;
-    pd++;
+    bytes += 8U;
   }
 
   HAL_FLASH_Lock();
@@ -128,18 +140,22 @@ HAL_StatusTypeDef StoreModbusRegs(void) {
   // 保存寄存器到flash
   for (; i < REG_GROUP_NUM; i++) {
     s_status = STMFLASH_Write(RegsStoreInfArr[i].pData, RegsStoreInfArr[i].addr,
-                              RegsStoreInfArr[i].nbyte);
+                              RegsStoreInfArr[i].nregs);
     if (s_status != HAL_OK)
       return s_status;
   }
   for (i = 0; i < REG_GROUP_NUM; i++) {
     s_status =
         STMFLASH_Write(RegsStoreInfArrf[i].pData, RegsStoreInfArrf[i].addr,
-                       RegsStoreInfArrf[i].nbyte);
+                       RegsStoreInfArrf[i].nregs);
     if (s_status != HAL_OK)
       return s_status;
   }
-  return s_status;
+  /* Written only after both complete extended RSVD images have been stored. */
+  {
+    uint64_t layoutTag = RSVD_LAYOUT_TAG;
+    return STMFLASH_Write(&layoutTag, RSVD_LAYOUT_TAG_ADDR, 4U);
+  }
 }
 
 #define HW_VERSION_NUM "v1"
@@ -160,7 +176,7 @@ void ResetFlash(void) {
          REG_GROUP_BYTES);
   memcpy((void *)&calib_settingsf, (void *)&calib_settings, REG_GROUP_BYTES);
   memcpy((void *)&filter_settingsf, (void *)&filter_settings, REG_GROUP_BYTES);
-  memcpy((void *)&rsvd_paramf, (void *)&rsvd_param, REG_GROUP_BYTES);
+  RsvdParam_PrepareFlash(&rsvd_paramf, &rsvd_param);
 
   __disable_irq();
   StoreModbusRegs();
@@ -185,7 +201,7 @@ void PowerOn_ReadModbusReg(void) {
       sizeof(MEASURE_SETTINGS_T) != REG_GROUP_BYTES ||
       sizeof(CALIB_SETTINGS_T) != REG_GROUP_BYTES ||
       sizeof(FILTER_SETTINGS_T) != REG_GROUP_BYTES ||
-      sizeof(RSVD_PARAM_T) != REG_GROUP_BYTES) {
+      sizeof(RSVD_PARAM_T) != RSVD_STORAGE_BYTES) {
     while (1) {
     }
   }
@@ -196,7 +212,6 @@ void PowerOn_ReadModbusReg(void) {
          REG_GROUP_BYTES);
   memcpy((void *)&calib_settings, (void *)(CAL_SET_SADDR), REG_GROUP_BYTES);
   memcpy((void *)&filter_settings, (void *)(FILTER_SET_SADDR), REG_GROUP_BYTES);
-  memcpy((void *)&rsvd_param, (void *)(RSVD_PARA_SADDR), REG_GROUP_BYTES);
 
   memcpy((void *)&system_statusf, (void *)(SYS_STATUS_SADDR_F),
          REG_GROUP_BYTES);
@@ -206,12 +221,34 @@ void PowerOn_ReadModbusReg(void) {
   memcpy((void *)&calib_settingsf, (void *)(CAL_SET_SADDR_F), REG_GROUP_BYTES);
   memcpy((void *)&filter_settingsf, (void *)(FILTER_SET_SADDR_F),
          REG_GROUP_BYTES);
-  memcpy((void *)&rsvd_paramf, (void *)(RSVD_PARA_SADDR_F), REG_GROUP_BYTES);
+  {
+    uint64_t layoutTag;
+    memcpy(&layoutTag, (const void *)RSVD_LAYOUT_TAG_ADDR, sizeof(layoutTag));
+    if (layoutTag == RSVD_LAYOUT_TAG) {
+      RsvdParam_Decode(&rsvd_param, (const void *)RSVD_PARA_SADDR, 1, NULL);
+      RsvdParam_Decode(&rsvd_paramf, (const void *)RSVD_PARA_SADDR_F, 1, NULL);
+    } else {
+      /* Import old user and factory parameters before any erase/save occurs. */
+      RsvdParam_Decode(&rsvd_param, (const void *)RSVD_PARA_LEGACY_SADDR,
+                      0, &calib_settings);
+      RsvdParam_Decode(&rsvd_paramf, (const void *)RSVD_PARA_LEGACY_SADDR_F,
+                      0, &calib_settingsf);
+    }
+  }
 
   if (system_status.newStructFlg != 0x2222) // 从未下载过程序的全新探头
   {
     ResetFlash();
   } else {
+    /* One-time update of the previous 35% default. Preserve custom limits,
+     * and do not overwrite a deliberate 35% setting saved by newer firmware. */
+    if (strcmp(system_status.softwareVer, "1.1.0") == 0 ||
+        strcmp(system_status.softwareVer, "1.1.1") == 0 ||
+        strcmp(system_status.softwareVer, "1.1.2") == 0 ||
+        strcmp(system_status.softwareVer, "1.1.3") == 0) {
+      if (rsvd_param.rampValveMin == 35.0f) rsvd_param.rampValveMin = 20.0f;
+      if (rsvd_paramf.rampValveMin == 35.0f) rsvd_paramf.rampValveMin = 20.0f;
+    }
     CheckParam();
     if (strcmp(system_status.softwareVer, SW_VERSION_NUM) != 0) {
       memset(system_status.softwareVer, 0, sizeof(system_status.softwareVer));
@@ -221,6 +258,8 @@ void PowerOn_ReadModbusReg(void) {
       __enable_irq();
     }
   }
+  /* Keep the saved mode. Mode 2 starts a fresh low-point stage in FlowControl_Run;
+   * RsvdParam_Decode has already cleared all previous runtime progress. */
   strcpy(system_status.softwareVer, SW_VERSION_NUM);
   strcpy(system_status.hardwareVer, HW_VERSION_NUM);
 }
